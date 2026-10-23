@@ -1,10 +1,9 @@
 // render.js – turns the state into DOM. It never fetches data or changes the state.
-import { getVisibleItems, getRegionOptions, getStats, formatNumber } from "./utils.js";
+import { getVisibleItems, getCategoryOptions, getStats, formatPrice, formatNumber } from "./utils.js";
 
 const statusEl = document.querySelector("#status");
 const resultsEl = document.querySelector("#results");
 const statsEl = document.querySelector("#stats");
-const warningEl = document.querySelector("#warning");
 const filterEl = document.querySelector("#filter");
 const cardTemplate = document.querySelector("#card-template");
 const dialog = document.querySelector("#details");
@@ -13,14 +12,13 @@ let itemsWithOptions = null; // the items the filter options were last built fro
 
 // Re-draws the whole page from the state.
 export function render(state) {
-  const { status, items, error, failedRegions, query } = state;
+  const { status, items, error, query } = state;
 
   if (items !== itemsWithOptions) renderFilterOptions(state);
-  warningEl.hidden = status !== "success" || failedRegions.length === 0;
 
   if (status === "loading") {
     statsEl.hidden = true;
-    statusEl.textContent = "Loading countries…";
+    statusEl.textContent = "Loading products…";
     resultsEl.replaceChildren(...Array.from({ length: 8 }, createSkeletonCard));
     return;
   }
@@ -34,36 +32,34 @@ export function render(state) {
 
   const visible = getVisibleItems(state);
   renderStats(getStats(visible));
-  warningEl.querySelector("p").textContent =
-    `Some data is missing: ${failedRegions.join(", ")} could not be loaded. Showing the other regions.`;
 
   if (visible.length === 0) {
     resultsEl.replaceChildren();
     statusEl.textContent = query.trim()
-      ? `No countries match "${query.trim()}". Try another name or region.`
-      : "No countries match this filter.";
+      ? `No products match "${query.trim()}". Try another word or category.`
+      : "No products match this category.";
     return;
   }
 
-  statusEl.textContent = `Showing ${visible.length} of ${items.length} countries.`;
+  statusEl.textContent = `Showing ${visible.length} of ${items.length} products.`;
   resultsEl.replaceChildren(...visible.map(createCard));
 }
 
 function renderFilterOptions({ items, filter }) {
-  const options = getRegionOptions(items).map(
-    ([region, count]) => new Option(`${region} (${count})`, region),
+  const options = getCategoryOptions(items).map(
+    ([slug, { name, count }]) => new Option(`${name} (${count})`, slug),
   );
-  filterEl.replaceChildren(new Option("All regions", "all"), ...options);
+  filterEl.replaceChildren(new Option("All categories", "all"), ...options);
   filterEl.value = filter;
   itemsWithOptions = items;
 }
 
-function renderStats({ shown, population, averagePopulation, area }) {
+function renderStats({ shown, averagePrice, averageRating, stock }) {
   const stats = [
-    ["Countries shown", formatNumber(shown)],
-    ["Total population", formatNumber(population)],
-    ["Average population", formatNumber(averagePopulation)],
-    ["Total area", `${formatNumber(area)} km²`],
+    ["Products shown", formatNumber(shown)],
+    ["Average price", formatPrice(averagePrice)],
+    ["Average rating", `${averageRating.toFixed(1)} / 5`],
+    ["Items in stock", formatNumber(stock)],
   ];
 
   statsEl.replaceChildren(
@@ -83,16 +79,17 @@ function renderStats({ shown, population, averagePopulation, area }) {
   statsEl.hidden = false;
 }
 
-function createCard({ code, name, capital, population, region, flag, flagAlt }) {
+function createCard({ id, title, brand, price, rating, categoryName, image }) {
   const card = cardTemplate.content.cloneNode(true);
   const img = card.querySelector("img");
-  img.src = flag;
-  img.alt = flagAlt;
-  card.querySelector("button").dataset.code = code;
-  card.querySelector(".card-name").textContent = name;
-  card.querySelector(".card-capital").textContent = capital;
-  card.querySelector(".card-population").textContent = formatNumber(population);
-  card.querySelector(".card-region").textContent = region;
+  img.src = image;
+  img.alt = title;
+  card.querySelector("button").dataset.id = id;
+  card.querySelector(".card-title").textContent = title;
+  card.querySelector(".card-brand").textContent = brand;
+  card.querySelector(".card-price").textContent = formatPrice(price);
+  card.querySelector(".card-rating").textContent = `★ ${rating.toFixed(1)}`;
+  card.querySelector(".card-category").textContent = categoryName;
   return card;
 }
 
@@ -101,11 +98,11 @@ function createSkeletonCard() {
   li.className = "animate-pulse overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200";
   li.setAttribute("aria-hidden", "true");
   li.innerHTML = `
-    <div class="h-36 bg-mist/50"></div>
+    <div class="h-40 bg-mist/50"></div>
     <div class="space-y-3 p-4">
       <div class="h-5 w-2/3 rounded bg-slate-200"></div>
       <div class="h-4 w-1/2 rounded bg-slate-200"></div>
-      <div class="h-4 w-3/5 rounded bg-slate-200"></div>
+      <div class="h-4 w-1/3 rounded bg-slate-200"></div>
     </div>`;
   return li;
 }
@@ -114,7 +111,7 @@ function createErrorBox(message) {
   const box = document.createElement("div");
   box.className = "mx-auto max-w-md rounded-2xl border-l-4 border-red-600 bg-red-50 p-6 text-left text-red-900";
   box.innerHTML = `
-    <h2 class="font-bold">Could not load the countries</h2>
+    <h2 class="font-bold">Could not load the products</h2>
     <p class="mt-1 text-sm"></p>
     <button type="button" class="btn-primary retry-btn mt-4">Try again</button>`;
   // The message goes in with textContent so it is never read as HTML.
@@ -125,47 +122,47 @@ function createErrorBox(message) {
 // Fills the details dialog from state.details and opens it if needed.
 export function renderDetails({ status, item, error }) {
   const body = dialog.querySelector("#details-body");
-  const flag = dialog.querySelector("#details-flag");
+  const image = dialog.querySelector("#details-image");
 
   if (status === "idle") return;
 
   if (status === "loading") {
-    flag.hidden = true;
+    image.hidden = true;
     body.innerHTML = `<p class="animate-pulse py-10 text-center font-semibold text-navy">Loading details…</p>`;
   } else if (status === "error") {
-    flag.hidden = true;
+    image.hidden = true;
     body.innerHTML = `<p class="py-10 text-center text-red-700"></p>`;
     body.querySelector("p").textContent = error;
   } else {
-    fillDetails(item, flag, body);
+    fillDetails(item, image, body);
   }
 
   if (!dialog.open) dialog.showModal();
 }
 
-function fillDetails(country, flag, body) {
-  const { name, officialName, flag: flagUrl, flagAlt, capital, region, subregion, population, area, languages, currencies } = country;
+function fillDetails(product, image, body) {
+  const { title, description, image: imageUrl, brand, categoryName, price, discount, rating, reviewCount, stock, availability, warranty, shipping } = product;
 
-  flag.hidden = false;
-  flag.src = flagUrl;
-  flag.alt = flagAlt;
+  image.hidden = false;
+  image.src = imageUrl;
+  image.alt = title;
 
-  const title = document.createElement("h2");
-  title.id = "details-name";
-  title.className = "text-2xl font-bold text-navy";
-  title.textContent = name;
+  const heading = document.createElement("h2");
+  heading.className = "text-2xl font-bold text-navy";
+  heading.textContent = title;
 
-  const subtitle = document.createElement("p");
-  subtitle.className = "text-sm text-slate-500";
-  subtitle.textContent = officialName;
+  const text = document.createElement("p");
+  text.className = "mt-1 text-sm text-slate-600";
+  text.textContent = description;
 
   const rows = [
-    ["Capital", capital],
-    ["Region", `${region} · ${subregion}`],
-    ["Population", formatNumber(population)],
-    ["Area", `${formatNumber(Math.round(area))} km²`],
-    ["Languages", languages.join(", ") || "Not listed"],
-    ["Currencies", currencies.join(", ") || "Not listed"],
+    ["Brand", brand],
+    ["Category", categoryName],
+    ["Price", `${formatPrice(price)} (${discount}% off)`],
+    ["Rating", `★ ${rating.toFixed(1)} from ${reviewCount} reviews`],
+    ["Stock", `${formatNumber(stock)} · ${availability}`],
+    ["Warranty", warranty],
+    ["Shipping", shipping],
   ];
 
   const list = document.createElement("dl");
@@ -182,5 +179,5 @@ function fillDetails(country, flag, body) {
     }),
   );
 
-  body.replaceChildren(title, subtitle, list);
+  body.replaceChildren(heading, text, list);
 }
