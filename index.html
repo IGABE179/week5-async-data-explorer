@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>World Explorer – Async Data Explorer</title>
+    <title>ShopScope – Async Data Explorer</title>
   </head>
   <body class="min-h-screen bg-mist/20 text-slate-800">
     <header class="bg-navy px-4 py-8 text-white">
       <div class="mx-auto max-w-6xl">
-        <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">World Explorer</h1>
-        <p class="mt-1 text-mist">Browse, search, filter and sort every country, loaded live from the REST Countries API.</p>
+        <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">ShopScope</h1>
+        <p class="mt-1 text-mist">Browse, search, filter and sort a product catalogue, loaded live from the DummyJSON API.</p>
       </div>
     </header>
 
@@ -18,22 +18,22 @@
       <form id="controls" class="grid gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:grid-cols-3" role="search">
         <div>
           <label for="search" class="label">Search</label>
-          <input id="search" type="search" class="field" placeholder="Country or capital…" autocomplete="off" />
+          <input id="search" type="search" class="field" placeholder="Product or brand…" autocomplete="off" />
         </div>
         <div>
-          <label for="filter" class="label">Region</label>
+          <label for="filter" class="label">Category</label>
           <select id="filter" class="field">
-            <option value="all">All regions</option>
+            <option value="all">All categories</option>
           </select>
         </div>
         <div>
           <label for="sort" class="label">Sort by</label>
           <select id="sort" class="field">
+            <option value="default">Default order</option>
+            <option value="price-asc">Price (low to high)</option>
+            <option value="price-desc">Price (high to low)</option>
+            <option value="rating-desc">Rating (best first)</option>
             <option value="name-asc">Name (A–Z)</option>
-            <option value="name-desc">Name (Z–A)</option>
-            <option value="population-desc">Population (high to low)</option>
-            <option value="population-asc">Population (low to high)</option>
-            <option value="area-desc">Area (largest first)</option>
           </select>
         </div>
       </form>
@@ -41,37 +41,34 @@
       <!-- Stats bar (filled by render) -->
       <section id="stats" class="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Statistics" hidden></section>
 
-      <!-- Partial failure notice -->
-      <div id="warning" class="mt-6 flex flex-col gap-3 rounded-lg border-l-4 border-amber-500 bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-center sm:justify-between" hidden>
-        <p></p>
-        <button type="button" class="btn-secondary retry-btn">Retry</button>
-      </div>
-
       <!-- Status message: loading, empty, error and result count -->
       <div id="status" class="mt-6 text-center text-slate-600" aria-live="polite"></div>
 
       <!-- Results -->
-      <ul id="results" class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-label="Countries"></ul>
+      <ul id="results" class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-label="Products"></ul>
     </main>
 
-    <!-- Country card template -->
+    <!-- Product card template -->
     <template id="card-template">
       <li>
-        <button type="button" class="country-card">
-          <img class="h-36 w-full border-b border-slate-200 object-cover" loading="lazy" />
-          <div class="flex flex-col gap-1 p-4">
-            <h2 class="card-name text-lg font-bold text-navy"></h2>
-            <p class="text-sm text-slate-600"><span class="font-semibold">Capital:</span> <span class="card-capital"></span></p>
-            <p class="text-sm text-slate-600"><span class="font-semibold">Population:</span> <span class="card-population"></span></p>
-            <span class="card-region mt-2 self-start rounded-full bg-mist/40 px-3 py-0.5 text-xs font-semibold text-navy"></span>
+        <button type="button" class="product-card">
+          <img class="h-40 w-full border-b border-slate-200 bg-white object-contain p-2" loading="lazy" />
+          <div class="flex flex-1 flex-col gap-1 p-4">
+            <span class="card-category self-start rounded-full bg-mist/40 px-3 py-0.5 text-xs font-semibold text-navy"></span>
+            <h2 class="card-title mt-1 font-bold text-navy"></h2>
+            <p class="card-brand text-sm text-slate-500"></p>
+            <div class="mt-auto flex items-center justify-between pt-2">
+              <span class="card-price text-lg font-bold text-navy"></span>
+              <span class="card-rating text-sm font-semibold text-gold"></span>
+            </div>
           </div>
         </button>
       </li>
     </template>
 
-    <!-- Country details dialog -->
-    <dialog id="details" class="m-auto w-[min(90vw,32rem)] rounded-2xl p-0 shadow-xl backdrop:bg-navy/60" aria-label="Country details">
-      <img id="details-flag" class="h-48 w-full border-b border-slate-200 object-cover" alt="" hidden />
+    <!-- Product details dialog -->
+    <dialog id="details" class="m-auto w-[min(90vw,32rem)] rounded-2xl p-0 shadow-xl backdrop:bg-navy/60" aria-label="Product details">
+      <img id="details-image" class="h-56 w-full border-b border-slate-200 bg-white object-contain p-4" alt="" hidden />
       <div class="p-6">
         <div id="details-body"></div>
         <form method="dialog" class="mt-6 text-right">
