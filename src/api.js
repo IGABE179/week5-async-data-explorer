@@ -1,9 +1,6 @@
 // api.js – every network request in the app goes through this file.
 
-const BASE = "https://restcountries.com/v3.1";
-const FIELDS = "name,cca3,capital,region,subregion,population,area,flags,languages,currencies";
-
-export const REGIONS = ["Africa", "Americas", "Asia", "Europe", "Oceania"];
+const BASE = "https://dummyjson.com";
 
 // Fetches a URL and returns the JSON. Throws an Error with the status if the request fails.
 export async function getJSON(url) {
@@ -21,23 +18,25 @@ export async function getJSON(url) {
   return response.json();
 }
 
-// All countries of one region, e.g. "Africa".
-export const getRegion = (region) =>
-  getJSON(`${BASE}/region/${region.toLowerCase()}?fields=${FIELDS}`);
+// All products (limit=0 asks DummyJSON for every product).
+export const getProducts = () => getJSON(`${BASE}/products?limit=0`);
 
-// One country by its three-letter code, e.g. "RWA".
-export const getCountry = (code) => getJSON(`${BASE}/alpha/${code}?fields=${FIELDS}`);
+// The list of categories, e.g. [{ slug: "beauty", name: "Beauty" }].
+export const getCategories = () => getJSON(`${BASE}/products/categories`);
 
-// Loads the 5 regions in parallel. A failed region does not stop the others.
-export async function getAllRegions() {
-  const results = await Promise.allSettled(REGIONS.map(getRegion));
+// One product by its id.
+export const getProduct = (id) => getJSON(`${BASE}/products/${id}`);
 
-  const countries = results
-    .filter(({ status }) => status === "fulfilled")
-    .flatMap(({ value }) => value);
+// Loads products and categories at the same time.
+// If only the categories fail, the app still works and uses the category slugs instead.
+export async function getCatalogue() {
+  const [productsResult, categoriesResult] = await Promise.allSettled([
+    getProducts(),
+    getCategories(),
+  ]);
 
-  const failedRegions = REGIONS.filter((_, index) => results[index].status === "rejected");
-  const firstError = results.find(({ status }) => status === "rejected")?.reason;
+  if (productsResult.status === "rejected") throw productsResult.reason;
 
-  return { countries, failedRegions, firstError };
+  const categories = categoriesResult.status === "fulfilled" ? categoriesResult.value : [];
+  return { products: productsResult.value.products, categories };
 }
