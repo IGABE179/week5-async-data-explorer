@@ -1,18 +1,18 @@
 // main.js – holds the state, listens for events and calls render().
 import "./style.css";
-import { getAllRegions, getCountry } from "./api.js";
-import { toCountry, debounce } from "./utils.js";
+import { getCatalogue, getProduct } from "./api.js";
+import { toProduct, toCategoryNames, debounce } from "./utils.js";
 import { render, renderDetails } from "./render.js";
 
 // The single source of truth for the page.
 const state = {
   items: [],
+  categoryNames: {},
   status: "loading", // "loading" | "success" | "error"
   error: null,
-  failedRegions: [],
   query: "",
   filter: "all",
-  sort: "name-asc",
+  sort: "default",
   details: { status: "idle", item: null, error: null },
 };
 
@@ -25,11 +25,9 @@ function setState(changes) {
 async function load() {
   setState({ status: "loading", error: null });
   try {
-    const { countries, failedRegions, firstError } = await getAllRegions();
-    if (countries.length === 0) throw firstError ?? new Error("The API returned no countries.");
-
-    state.items = countries.map(toCountry);
-    state.failedRegions = failedRegions;
+    const { products, categories } = await getCatalogue();
+    state.categoryNames = toCategoryNames(categories);
+    state.items = products.map((product) => toProduct(product, state.categoryNames));
     state.status = "success";
   } catch (error) {
     console.error(error);
@@ -40,15 +38,15 @@ async function load() {
   }
 }
 
-// Opens the dialog, fetches the single country, and falls back to the list data if that fails.
-async function showDetails(code) {
-  const saved = state.items.find((country) => country.code === code);
+// Opens the dialog, fetches the single product, and falls back to the list data if that fails.
+async function showDetails(id) {
+  const saved = state.items.find((product) => product.id === id);
   state.details = { status: "loading", item: null, error: null };
   renderDetails(state.details);
 
   try {
-    const data = await getCountry(code);
-    state.details = { status: "success", item: toCountry(data), error: null };
+    const data = await getProduct(id);
+    state.details = { status: "success", item: toProduct(data, state.categoryNames), error: null };
   } catch (error) {
     state.details = saved
       ? { status: "success", item: saved, error: null }
@@ -76,16 +74,16 @@ document.querySelector("#sort").addEventListener("change", (event) =>
 
 // One listener for every card (event delegation).
 document.querySelector("#results").addEventListener("click", (event) => {
-  const card = event.target.closest("[data-code]");
-  if (card) showDetails(card.dataset.code);
+  const card = event.target.closest("[data-id]");
+  if (card) showDetails(Number(card.dataset.id));
 });
 
 document.querySelector("#details").addEventListener("close", () => {
   state.details = { status: "idle", item: null, error: null };
 });
 
-// Retry buttons in the error box and in the warning bar.
-document.addEventListener("click", (event) => {
+// The Retry button in the error box re-runs the request.
+document.querySelector("#status").addEventListener("click", (event) => {
   if (event.target.closest(".retry-btn")) load();
 });
 
